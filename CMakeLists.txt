@@ -34,7 +34,7 @@ include_directories( ${PROJECT_SOURCE_DIR}/api )
 #                                   Build source file list                                #
 #                                                                                         #
 ###########################################################################################
-find_files_by_ext( PROJECT_SOURCE_FILES ${PROJECT_SOURCE_DIR} "${EXTENTIONS_CPP_SRC}" )
+find_files_by_ext( RECURSE FILES PROJECT_SOURCE_FILES LOCATION ${PROJECT_SOURCE_DIR} EXTENTIONS ${EXTENTIONS_CPP_SRC} )
 
 
 
