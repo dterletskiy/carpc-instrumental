@@ -1,3 +1,4 @@
+#include <cxxabi.h>
 #include "Elf64.hpp"
 
 
@@ -8,6 +9,7 @@ const std::size_t MAX_DEPTH = 4096; // sizeof( call_chain ) / sizeof( call_chain
 
 
 char* call_chain[ MAX_DEPTH ];
+unsigned long long call_time[ MAX_DEPTH ];
 std::size_t depth = 0;
 FILE* log_file_handle = nullptr;
 instrumental::Elf64* elf;
@@ -118,20 +120,38 @@ extern "C" {
             break;
          }
 
-         call_chain[ depth + 1 ] = &(elf->strtab)[ elf64_sym.st_name ];
+         int status = 0;
+         char* mangled_name = &(elf->strtab)[ elf64_sym.st_name ];
+         char* demangled_name = abi::__cxa_demangle( mangled_name, nullptr, nullptr, &status );
+         if( status == 0 )
+         {
+            call_chain[ depth + 1 ] = demangled_name;
+         }
+         else
+         {
+            call_chain[ depth + 1 ] = mangled_name;
+         }
+
          break;
       }
 
       {
-         uid_t uid, euid, ruid;
-         getresuid( &ruid, &euid, &uid );
-         fprintf( log_file_handle, "~ [%04d|%04d|%04d] ", ruid, euid, uid );
+         // uid_t uid, euid, ruid;
+         // getresuid( &ruid, &euid, &uid );
+         // fprintf( log_file_handle, "~ [%04d|%04d|%04d] ", ruid, euid, uid );
+
+         call_time[ depth ] = __rdtsc( );
+         fprintf( log_file_handle, "--->> %lld", call_time[ depth ] );
 
          for( std::size_t i = 0; i < depth; ++i )
             fprintf( log_file_handle, "  |" );
          fprintf( log_file_handle, "--" );
 
-         fprintf( log_file_handle, "%s -> %s [depth=%zu];\n", call_chain[ depth ], call_chain[ depth + 1 ], depth );
+         fprintf( log_file_handle, "[depth=%zu]   %s --|> %s\n{\n",
+               depth,
+               call_chain[ depth ],
+               call_chain[ depth + 1 ]
+            );
       }
 
       ++depth;
@@ -142,5 +162,19 @@ extern "C" {
       // printf( "\nEXIT:  %p, --> %p: %lld\n", this_fn, call_site, __rdtsc( ) );
 
       --depth;
+
+      unsigned long long exit_time = __rdtsc( );
+      fprintf( log_file_handle, "<<--- %lld", exit_time );
+
+      for( std::size_t i = 0; i < depth; ++i )
+         fprintf( log_file_handle, "  |" );
+      fprintf( log_file_handle, "--" );
+
+      fprintf( log_file_handle, "[depth=%zu]   %s <|-- %s\n} %lld\n",
+            depth,
+            call_chain[ depth ],
+            call_chain[ depth + 1 ],
+            exit_time - call_time[ depth ]
+         );
    }
 }
